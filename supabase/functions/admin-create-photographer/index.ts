@@ -1,5 +1,5 @@
 // Supabase Edge Function: admin-create-photographer
-// Adds a photographer profile to the public roster WITHOUT creating or inviting an Auth user.
+// Creates/invites a photographer Auth user and links their profile to that account.
 // Deploy: supabase functions deploy admin-create-photographer
 // Configure secrets: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SHUTTERBOOK_ADMIN_EMAIL
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -29,7 +29,7 @@ Deno.serve(async (req) => {
     return reply({ error: "Admin access only." }, 403);
   }
 
-  let body: { display_name?: string; location?: string; bio?: string; portfolio_url?: string };
+  let body: { display_name?: string; email?: string; location?: string; bio?: string; portfolio_url?: string };
   try { body = await req.json(); } catch { return reply({ error: "Invalid JSON." }, 400); }
 
   const name = body.display_name?.trim();
@@ -45,7 +45,7 @@ Deno.serve(async (req) => {
   }).select("id,display_name,location,user_id,active").single();
 
   if (profileError) return reply({ error: profileError.message }, 400);
-  return reply({ ok: true, profile });
+  return reply({ ok: true, profile, invited_email: email });
 });
 
 function reply(payload: unknown, status = 200) {
