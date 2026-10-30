@@ -46,7 +46,7 @@ Deno.serve(async (req) => {
     const db = createClient(url, serviceRoleKey);
     const { data, error } = await db
       .from("bookings")
-      .select("id,photographer_id,customer_name:client_name,customer_email:client_email,customer_phone:client_phone,event_type,event_location:location,notes,status,created_at,start_at,end_at,photographers(display_name)")
+      .select("id,photographer_id,customer_name:client_name,customer_email:client_email,customer_phone:client_phone,event_type,event_location,notes,status,created_at,start_at,end_at,photographers(display_name)")
       .order("created_at", { ascending: false });
 
     if (error) {
