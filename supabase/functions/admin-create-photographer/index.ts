@@ -32,11 +32,35 @@ Deno.serve(async (req) => {
   const name = body.display_name?.trim();
   const email = body.email?.trim().toLowerCase();
   if (!name || name.length < 2) return reply({ error: "Enter a photographer name (at least 2 characters)." }, 400);
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+  if (!body.profile_only && (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) {
     return reply({ error: "Enter a valid photographer email." }, 400);
   }
 
-  // Profile-only mode adds the roster record without creating an Auth user or sending email.\n  let authUser: { id: string } | null = null;\n  let invitationSent = false;\n  if (!body.profile_only) {\n    const { data: invited, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(email!, {\n      data: { display_name: name, role: "photographer" },\n      redirectTo: "https://czykramdev.github.io/shutterbook/photographer.html",\n    });\n    authUser = invited?.user || null;\n    invitationSent = Boolean(authUser);\n    if (!authUser && inviteError) {\n      let page = 1;\n      while (!authUser && page <= 20) {\n        const { data, error } = await adminClient.auth.admin.listUsers({ page, perPage: 500 });\n        if (error) break;\n        authUser = data.users.find((candidate) => candidate.email?.toLowerCase() === email) || null;\n        if (data.users.length < 500) break;\n        page++;\n      }\n      if (!authUser) return reply({ error: "Supabase could not invite this email: " + inviteError.message }, 400);\n    }\n    if (!authUser) return reply({ error: "Supabase did not return a photographer login." }, 500);\n  }\n\n  const profileData = {
+  // Profile-only mode adds the roster record without creating an Auth user or sending email.
+  let authUser: { id: string } | null = null;
+  let invitationSent = false;
+  if (!body.profile_only) {
+    const { data: invited, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(email!, {
+      data: { display_name: name, role: "photographer" },
+      redirectTo: "https://czykramdev.github.io/shutterbook/photographer.html",
+    });
+    authUser = invited?.user || null;
+    invitationSent = Boolean(authUser);
+    if (!authUser && inviteError) {
+      let page = 1;
+      while (!authUser && page <= 20) {
+        const { data, error } = await adminClient.auth.admin.listUsers({ page, perPage: 500 });
+        if (error) break;
+        authUser = data.users.find((candidate) => candidate.email?.toLowerCase() === email) || null;
+        if (data.users.length < 500) break;
+        page++;
+      }
+      if (!authUser) return reply({ error: "Supabase could not invite this email: " + inviteError.message }, 400);
+    }
+    if (!authUser) return reply({ error: "Supabase did not return a photographer login." }, 500);
+  }
+
+  const profileData = {
     user_id: authUser?.id || null,
     display_name: name,
     location: body.location?.trim() || null,
@@ -75,7 +99,8 @@ Deno.serve(async (req) => {
   return reply({
     ok: true,
     profile,
-    invited_email: email || null,\n    profile_only: Boolean(body.profile_only),
+    invited_email: email || null,
+    profile_only: Boolean(body.profile_only),
     invitation_sent: invitationSent,
     setup_link: setupLink,
     message: invitationSent
