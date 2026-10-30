@@ -139,6 +139,38 @@ create policy "Photographers can mark own notifications read"
   using (recipient_user_id = auth.uid())
   with check (recipient_user_id = auth.uid());
 
+create or replace function public.available_photographers(
+  p_start_at timestamptz,
+  p_end_at timestamptz
+)
+returns table (id uuid, display_name text, location text, bio text)
+language sql
+stable
+security definer
+set search_path = public, extensions
+as $
+  select p.id, p.display_name, p.location, p.bio
+  from public.photographers p
+  where p.active = true
+    and p_start_at < p_end_at
+    and not exists (
+      select 1 from public.bookings b
+      where b.photographer_id = p.id
+        and b.status in ('pending','confirmed')
+        and tstzrange(b.start_at, b.end_at, '[)') && tstzrange(p_start_at, p_end_at, '[)')
+    )
+    and not exists (
+      select 1 from public.photographer_availability a
+      where a.photographer_id = p.id
+        and a.is_available = false
+        and tstzrange(a.start_at, a.end_at, '[)') && tstzrange(p_start_at, p_end_at, '[)')
+    )
+  order by p.display_name;
+$;
+
+revoke all on function public.available_photographers(timestamptz,timestamptz) from public;
+grant execute on function public.available_photographers(timestamptz,timestamptz) to anon, authenticated;
+
 create or replace function public.request_booking(
   p_photographer_id uuid,
   p_package_id uuid,
