@@ -1,0 +1,1 @@
+{"name":"ShutterBook Photography Booking","short_name":"ShutterBook","description":"Book your photography session.","start_url":"./index.html","scope":"./","display":"standalone","background_color":"#f7f5f0","theme_color":"#171714","icons":[{"src":"icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]}
