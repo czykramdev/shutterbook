@@ -131,7 +131,7 @@ if('serviceWorker' in navigator)window.addEventListener('load',()=>navigator.ser
     Array.from(photographerSelect.options).forEach((option) => {
       if (option.value) option.disabled = !allowed.has(option.value);
     });
-    if (!selectedStillAvailable) {
+    // Do not disable the photographer choices while the customer is selecting.\n    // Availability is validated by the booking RPC when they submit.\n    /* if (!selectedStillAvailable) {
       photographerSelect.value = "";
       if (window.toast) window.toast("That photographer is not available for this time. Please choose another.");
     }
