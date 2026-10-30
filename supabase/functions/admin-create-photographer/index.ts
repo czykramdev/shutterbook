@@ -1,7 +1,7 @@
 // Supabase Edge Function: admin-create-photographer
-// Creates/invites a photographer Auth user and links their profile to that account.
+// Invites a photographer to Supabase Auth and links the Auth user to their roster profile.
 // Deploy: supabase functions deploy admin-create-photographer
-// Configure secrets: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SHUTTERBOOK_ADMIN_EMAIL
+// Secrets: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SHUTTERBOOK_ADMIN_EMAIL
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -33,10 +33,22 @@ Deno.serve(async (req) => {
   try { body = await req.json(); } catch { return reply({ error: "Invalid JSON." }, 400); }
 
   const name = body.display_name?.trim();
+  const email = body.email?.trim().toLowerCase();
   if (!name || name.length < 2) return reply({ error: "Enter a photographer name (at least 2 characters)." }, 400);
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return reply({ error: "Enter a valid photographer email." }, 400);
+  }
+
+  // Supabase creates the Auth identity and sends the password-setup invitation.
+  const { data: invited, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(email, {
+    data: { display_name: name, role: "photographer" },
+  });
+  if (inviteError || !invited.user) {
+    return reply({ error: inviteError?.message || "Could not create photographer login." }, 400);
+  }
 
   const { data: profile, error: profileError } = await adminClient.from("photographers").insert({
-    user_id: null,
+    user_id: invited.user.id,
     display_name: name,
     location: body.location?.trim() || null,
     bio: body.bio?.trim() || null,
