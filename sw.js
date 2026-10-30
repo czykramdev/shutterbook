@@ -1,4 +1,4 @@
-const CACHE='shutterbook-v2';
+const CACHE='shutterbook-v3';
 const CORE=['./','./index.html','./manifest.json','./icon.svg'];
 
 self.addEventListener('install',event=>{
@@ -17,8 +17,8 @@ self.addEventListener('fetch',event=>{
   if(event.request.method!=='GET') return;
   const url=new URL(event.request.url);
 
-  // Always fetch JavaScript from the network so fixes aren't trapped in a stale cache.
-  if(url.origin===location.origin && (url.pathname.endsWith('/app.js') || url.pathname.endsWith('/index.html'))) {
+  // Always use network for app pages; don't serve stale admin/dashboard HTML.
+  if(url.origin===location.origin && (url.pathname.endsWith('/admin.html') || url.pathname.endsWith('/photographer.html') || url.pathname.endsWith('/index.html') || url.pathname.endsWith('/app.js'))) {
     event.respondWith(fetch(event.request).then(response=>{
       if(response.ok) caches.open(CACHE).then(cache=>cache.put(event.request,response.clone()));
       return response;
