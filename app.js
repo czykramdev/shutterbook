@@ -38,26 +38,34 @@
   }
 
   async function loadPhotographers() {
-    photographerSelect.innerHTML = '<option value="">Loading photographers…</option>';
-    const { data, error } = await client
-      .from("photographers")
-      .select("id,display_name,location,bio")
-      .eq("active", true)
-      .order("display_name");
-    if (error) {
-      photographerSelect.innerHTML = '<option value="">Photographers could not load</option>';
-      console.error(error);
-      return;
-    }
-    photographerSelect.innerHTML = '<option value="">Choose a photographer</option>';
-    (data || []).forEach((photographer) => {
-      const option = document.createElement("option");
-      option.value = photographer.id;
-      option.textContent = photographer.display_name + (photographer.location ? " · " + photographer.location : "");
-      photographerSelect.appendChild(option);
-    });
-    if (!data || data.length === 0) {
-      photographerSelect.innerHTML = '<option value="">Photographers will appear here when added</option>';
+    photographerSelect.innerHTML = '<option value="">Connecting to ShutterBook…</option>';
+    photographerSelect.disabled = true;
+    try {
+      const request = client.from("photographers")
+        .select("id,display_name,location,bio")
+        .eq("active", true).order("display_name");
+      const timeout = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("Request timed out. Check Supabase and your connection.")), 12000)
+      );
+      const { data, error } = await Promise.race([request, timeout]);
+      if (error) throw error;
+      photographerSelect.innerHTML = '<option value="">Choose a photographer</option>';
+      (data || []).forEach((photographer) => {
+        const option = document.createElement("option");
+        option.value = photographer.id;
+        option.textContent = photographer.display_name + (photographer.location ? " · " + photographer.location : "");
+        photographerSelect.appendChild(option);
+      });
+      if (!data || data.length === 0) {
+        photographerSelect.innerHTML = '<option value="">No active photographers yet</option>';
+        if (window.toast) window.toast("No active photographer profiles found in Supabase.");
+      }
+    } catch (error) {
+      console.error("ShutterBook photographer load failed:", error);
+      photographerSelect.innerHTML = '<option value="">Could not connect — refresh to retry</option>';
+      if (window.toast) window.toast("Photographers could not load: " + (error?.message || "Unknown error"));
+    } finally {
+      photographerSelect.disabled = false;
     }
   }
 
