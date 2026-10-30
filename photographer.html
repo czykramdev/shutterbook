@@ -23,13 +23,23 @@ const fmtDate=v=>new Date(v).toLocaleString(undefined,{dateStyle:"medium",timeSt
 function showError(msg){$("#authMessage").textContent=msg}
 function escapeHtml(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 async function enter(user){$("#authPanel").classList.add("hidden");$("#dashboard").classList.remove("hidden");$("#signout").classList.remove("hidden");await loadBookings(user)}
-async function loadBookings(user){$("#bookingList").innerHTML='<div class="empty">Loading your bookings…</div>';
- const {data:profile,error:pe}=await sb.from("photographers").select("id,display_name").eq("user_id",user.id).maybeSingle();
- if(pe||!profile){$("#bookingList").innerHTML='<div class="empty">No photographer profile is linked to this login yet.<br><br>Ask the ShutterBook admin to link your profile to your Supabase Auth user ID.</div>';$("#welcome").textContent="Photographer dashboard";return}
- $("#welcome").textContent="Hi, "+profile.display_name;
- const {data,error}=await sb.from("bookings").select("*").eq("photographer_id",profile.id).order("start_at",{ascending:true});
- if(error){$("#bookingList").innerHTML='<div class="empty">Could not load bookings: '+escapeHtml(error.message)+'</div>';return}
- rows=data||[];$("#pendingCount").textContent=rows.filter(b=>b.status==="pending").length;$("#confirmedCount").textContent=rows.filter(b=>b.status==="confirmed").length;$("#upcomingCount").textContent=rows.filter(b=>b.status==="confirmed"&&new Date(b.start_at)>new Date()).length;renderRows()
+async function loadBookings(user){
+ $("#bookingList").innerHTML='<div class="empty">Loading your bookings…</div>';
+ try {
+   const {data:profile,error:pe}=await sb.from("photographers").select("id,display_name").eq("user_id",user.id).maybeSingle();
+   if(pe) throw pe;
+   if(!profile){$("#bookingList").innerHTML='<div class="empty">This login is not linked to a photographer profile yet. Ask the admin to link this account.</div>';$("#welcome").textContent="Photographer dashboard";return}
+   $("#welcome").textContent="Hi, "+profile.display_name;
+   const {data,error}=await sb.from("bookings").select("*").eq("photographer_id",profile.id).order("start_at",{ascending:true});
+   if(error) throw error;
+   rows=data||[];
+   $("#pendingCount").textContent=rows.filter(b=>b.status==="pending").length;
+   $("#confirmedCount").textContent=rows.filter(b=>b.status==="confirmed").length;
+   $("#upcomingCount").textContent=rows.filter(b=>b.status==="confirmed"&&new Date(b.start_at)>new Date()).length;
+   renderRows();
+ } catch(error) {
+   $("#bookingList").innerHTML='<div class="empty">Could not load bookings: '+escapeHtml(error.message||String(error))+'</div>';
+ }
 }
 function renderRows(){let f=$("#filter").value;let filtered=rows.filter(b=>f==="all"||b.status===f);if(!filtered.length){$("#bookingList").innerHTML='<div class="empty">Nothing here yet. New requests will show up here.</div>';return}
  $("#bookingList").innerHTML=filtered.map(b=>'<article class="booking"><div class="booking-head"><div><h3>'+escapeHtml(b.event_type||"Photography session")+' · '+escapeHtml(b.client_name)+'</h3><div class="meta">'+escapeHtml(fmtDate(b.start_at))+' · '+escapeHtml(b.event_location)+'</div><div class="meta">'+escapeHtml(b.client_email)+(b.client_phone?" · "+escapeHtml(b.client_phone):"")+'</div></div><span class="status '+escapeHtml(b.status)+'">'+escapeHtml(b.status)+'</span></div>'+(b.notes?'<div class="notes">'+escapeHtml(b.notes)+'</div>':"")+'<div class="actions">'+(b.status==="pending"?'<button class="confirm" data-id="'+b.id+'" data-status="confirmed">Confirm booking</button><button class="decline" data-id="'+b.id+'" data-status="declined">Decline</button>':"")+(b.status==="confirmed"?'<button class="complete" data-id="'+b.id+'" data-status="completed">Mark completed</button><button class="decline" data-id="'+b.id+'" data-status="cancelled">Cancel</button>':"")+'</div></article>').join("");
