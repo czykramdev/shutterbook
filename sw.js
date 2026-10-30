@@ -1,4 +1,4 @@
-const CACHE='shutterbook-v4';
+const CACHE='shutterbook-v5';
 const CORE=['./','./index.html','./manifest.json','./icon.svg'];
 
 self.addEventListener('install',event=>{
