@@ -26,7 +26,7 @@ Deno.serve(async (req) => {
     return reply({ error: "Admin access only. Check SHUTTERBOOK_ADMIN_EMAIL." }, 403);
   }
 
-  let body: { display_name?: string; email?: string; location?: string; bio?: string; portfolio_url?: string };
+  let body: { display_name?: string; email?: string; location?: string; bio?: string; portfolio_url?: string; profile_only?: boolean };
   try { body = await req.json(); } catch { return reply({ error: "Invalid JSON." }, 400); }
 
   const name = body.display_name?.trim();
@@ -36,32 +36,8 @@ Deno.serve(async (req) => {
     return reply({ error: "Enter a valid photographer email." }, 400);
   }
 
-  // First try to invite a new Auth user. If an earlier attempt already created
-  // the Auth user but failed before creating the roster row, repair that link.
-  const { data: invited, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(email, {
-    data: { display_name: name, role: "photographer" },
-    redirectTo: "https://czykramdev.github.io/shutterbook/photographer.html",
-  });
-
-  let authUser = invited?.user || null;
-  let invitationSent = Boolean(authUser);
-
-  if (!authUser && inviteError) {
-    let page = 1;
-    while (!authUser && page <= 20) {
-      const { data, error } = await adminClient.auth.admin.listUsers({ page, perPage: 500 });
-      if (error) break;
-      authUser = data.users.find((candidate) => candidate.email?.toLowerCase() === email) || null;
-      if (data.users.length < 500) break;
-      page++;
-    }
-    if (!authUser) return reply({ error: "Supabase could not invite this email: " + inviteError.message }, 400);
-  }
-
-  if (!authUser) return reply({ error: "Supabase did not return a photographer login." }, 500);
-
-  const profileData = {
-    user_id: authUser.id,
+  // Profile-only mode adds the roster record without creating an Auth user or sending email.\n  let authUser: { id: string } | null = null;\n  let invitationSent = false;\n  if (!body.profile_only) {\n    const { data: invited, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(email!, {\n      data: { display_name: name, role: "photographer" },\n      redirectTo: "https://czykramdev.github.io/shutterbook/photographer.html",\n    });\n    authUser = invited?.user || null;\n    invitationSent = Boolean(authUser);\n    if (!authUser && inviteError) {\n      let page = 1;\n      while (!authUser && page <= 20) {\n        const { data, error } = await adminClient.auth.admin.listUsers({ page, perPage: 500 });\n        if (error) break;\n        authUser = data.users.find((candidate) => candidate.email?.toLowerCase() === email) || null;\n        if (data.users.length < 500) break;\n        page++;\n      }\n      if (!authUser) return reply({ error: "Supabase could not invite this email: " + inviteError.message }, 400);\n    }\n    if (!authUser) return reply({ error: "Supabase did not return a photographer login." }, 500);\n  }\n\n  const profileData = {
+    user_id: authUser?.id || null,
     display_name: name,
     location: body.location?.trim() || null,
     bio: body.bio?.trim() || null,
@@ -99,7 +75,7 @@ Deno.serve(async (req) => {
   return reply({
     ok: true,
     profile,
-    invited_email: email,
+    invited_email: email || null,\n    profile_only: Boolean(body.profile_only),
     invitation_sent: invitationSent,
     setup_link: setupLink,
     message: invitationSent
