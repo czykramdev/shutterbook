@@ -32,7 +32,7 @@ Deno.serve(async (req) => {
   const name = body.display_name?.trim();
   const email = body.email?.trim().toLowerCase();
   if (!name || name.length < 2) return reply({ error: "Enter a photographer name (at least 2 characters)." }, 400);
-  if (!email || !/^[^\s@]+@[^\s@]+\\.[^\s@]+$/.test(email)) {
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return reply({ error: "Enter a valid photographer email." }, 400);
   }
 
