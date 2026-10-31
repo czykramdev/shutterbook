@@ -1,4 +1,4 @@
-// ShutterBook: create or repair a photographer login/profile link.
+// ShutterBook: admin creates photographer credentials directly; no invite email is sent.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -18,94 +18,57 @@ Deno.serve(async (req) => {
 
   const authHeader = req.headers.get("Authorization") || "";
   if (!authHeader.startsWith("Bearer ")) return reply({ error: "Sign in as admin first." }, 401);
-
   const adminClient = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
-  const token = authHeader.slice(7);
-  const { data: { user }, error: userError } = await adminClient.auth.getUser(token);
+  const { data: { user }, error: userError } = await adminClient.auth.getUser(authHeader.slice(7));
   if (userError || !user || !adminEmail || user.email?.trim().toLowerCase() !== adminEmail) {
     return reply({ error: "Admin access only. Check SHUTTERBOOK_ADMIN_EMAIL." }, 403);
   }
 
-  let body: { display_name?: string; email?: string; location?: string; bio?: string; portfolio_url?: string; profile_only?: boolean };
+  let body: { display_name?: string; username?: string; password?: string; location?: string; bio?: string; portfolio_url?: string };
   try { body = await req.json(); } catch { return reply({ error: "Invalid JSON." }, 400); }
-
   const name = body.display_name?.trim();
-  const email = body.email?.trim().toLowerCase();
+  const username = body.username?.trim().toLowerCase();
+  const password = body.password || "";
   if (!name || name.length < 2) return reply({ error: "Enter a photographer name (at least 2 characters)." }, 400);
-  if (!body.profile_only && (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) {
-    return reply({ error: "Enter a valid photographer email." }, 400);
+  if (!username || !/^[a-z0-9][a-z0-9._-]{2,29}$/.test(username)) {
+    return reply({ error: "Username must be 3–30 characters: lowercase letters, numbers, dots, underscores, or hyphens." }, 400);
   }
+  if (password.length < 8) return reply({ error: "Temporary password must be at least 8 characters." }, 400);
 
-  // Profile-only mode adds the roster record without creating an Auth user or sending email.
-  let authUser: { id: string } | null = null;
-  let invitationSent = false;
-  if (!body.profile_only) {
-    const { data: invited, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(email!, {
-      data: { display_name: name, role: "photographer" },
-      redirectTo: "https://czykramdev.github.io/shutterbook/photographer.html",
-    });
-    authUser = invited?.user || null;
-    invitationSent = Boolean(authUser);
-    if (!authUser && inviteError) {
-      let page = 1;
-      while (!authUser && page <= 20) {
-        const { data, error } = await adminClient.auth.admin.listUsers({ page, perPage: 500 });
-        if (error) break;
-        authUser = data.users.find((candidate) => candidate.email?.toLowerCase() === email) || null;
-        if (data.users.length < 500) break;
-        page++;
-      }
-      if (!authUser) return reply({ error: "Supabase could not invite this email: " + inviteError.message }, 400);
-    }
-    if (!authUser) return reply({ error: "Supabase did not return a photographer login." }, 500);
+  // Reserved synthetic address enables Supabase email/password auth without sending any email.
+  const authEmail = username + "@login.shutterbook.invalid";
+  const { data: created, error: createError } = await adminClient.auth.admin.createUser({
+    email: authEmail,
+    password,
+    email_confirm: true,
+    user_metadata: { display_name: name, username, role: "photographer" },
+  });
+  if (createError || !created.user) {
+    return reply({ error: createError?.message || "Supabase did not create the login." }, 400);
   }
 
   const profileData = {
-    user_id: authUser?.id || null,
+    user_id: created.user.id,
     display_name: name,
     location: body.location?.trim() || null,
     bio: body.bio?.trim() || null,
     portfolio_urls: body.portfolio_url?.trim() ? [body.portfolio_url.trim()] : [],
     active: true,
   };
+  const { data: profile, error: profileError } = await adminClient.from("photographers")
+    .insert(profileData).select("id,display_name,location,user_id,active").single();
 
-  const { data: existingProfile, error: lookupError } = await adminClient
-    .from("photographers").select("id").eq("user_id", authUser.id).maybeSingle();
-  if (lookupError) return reply({ error: "Login exists, but profile lookup failed: " + lookupError.message }, 400);
-
-  let profile;
-  let profileError;
-  if (existingProfile) {
-    const result = await adminClient.from("photographers").update(profileData)
-      .eq("id", existingProfile.id).select("id,display_name,location,user_id,active").single();
-    profile = result.data; profileError = result.error;
-  } else {
-    const result = await adminClient.from("photographers").insert(profileData)
-      .select("id,display_name,location,user_id,active").single();
-    profile = result.data; profileError = result.error;
-  }
-  if (profileError) return reply({ error: "Login was created, but the photographer profile could not be linked: " + profileError.message }, 400);
-
-  let setupLink: string | null = null;
-  if (!invitationSent) {
-    const { data: linkData } = await adminClient.auth.admin.generateLink({
-      type: "recovery",
-      email,
-      options: { redirectTo: "https://czykramdev.github.io/shutterbook/photographer.html" },
-    });
-    setupLink = linkData?.properties?.action_link || null;
+  if (profileError) {
+    // Avoid leaving a detached login behind when profile creation fails.
+    await adminClient.auth.admin.deleteUser(created.user.id);
+    return reply({ error: "Could not save photographer profile: " + profileError.message }, 400);
   }
 
   return reply({
     ok: true,
     profile,
-    invited_email: email || null,
-    profile_only: Boolean(body.profile_only),
-    invitation_sent: invitationSent,
-    setup_link: setupLink,
-    message: invitationSent
-      ? "Photographer profile linked and invitation email sent."
-      : "Existing Auth account linked to this photographer profile. Use the password-reset link if they need to set or reset their password.",
+    username,
+    message: "Photographer account created and linked. No email was sent. Share the username and temporary password privately.",
   });
 });
 
