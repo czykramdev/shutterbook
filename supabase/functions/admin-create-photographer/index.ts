@@ -30,8 +30,8 @@ Deno.serve(async (req) => {
   const username = body.username?.trim().toLowerCase();
   const password = body.password || "";
   if (!name || name.length < 2) return reply({ error: "Enter a photographer name (at least 2 characters)." }, 400);
-  if (!username || !/^[a-z0-9][a-z0-9._-]{2,29}$/.test(username)) {
-    return reply({ error: "Username must be 3–30 characters: lowercase letters, numbers, dots, underscores, or hyphens." }, 400);
+  if (!username || username.length > 80 || !/^[\p{L}\p{N}][\p{L}\p{N} ._@+-]*$/u.test(username)) {
+    return reply({ error: "Enter a username using letters, numbers, spaces, dots, underscores, @, +, or hyphens (up to 80 characters)." }, 400);
   }
   if (password.length < 8) return reply({ error: "Temporary password must be at least 8 characters." }, 400);
 
