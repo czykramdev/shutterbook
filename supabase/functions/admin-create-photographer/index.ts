@@ -27,11 +27,11 @@ Deno.serve(async (req) => {
   let body: { display_name?: string; username?: string; password?: string; location?: string; bio?: string; portfolio_url?: string };
   try { body = await req.json(); } catch { return reply({ error: "Invalid JSON." }, 400); }
   const name = body.display_name?.trim();
-  const username = body.username?.trim().toLowerCase();
+  const rawUsername = body.username?.trim().toLowerCase() || "";\n  // Convert display-friendly usernames into a safe email local-part for Supabase Auth.\n  const username = rawUsername.normalize("NFKD").replace(/[\\u0300-\\u036f]/g, "").replace(/[^a-z0-9._-]+/g, "-").replace(/^[._-]+|[._-]+$/g, "");
   const password = body.password || "";
   if (!name || name.length < 2) return reply({ error: "Enter a photographer name (at least 2 characters)." }, 400);
   if (!username || username.length > 80 || !/^[\p{L}\p{N}][\p{L}\p{N} ._@+-]*$/u.test(username)) {
-    return reply({ error: "Enter a username using letters, numbers, spaces, dots, underscores, @, +, or hyphens (up to 80 characters)." }, 400);
+    return reply({ error: "Username must contain 3–30 characters. Use letters/numbers; spaces and symbols are converted to hyphens or removed." }, 400);
   }
   if (password.length < 8) return reply({ error: "Temporary password must be at least 8 characters." }, 400);
 
