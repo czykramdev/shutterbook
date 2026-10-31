@@ -35,8 +35,8 @@ Deno.serve(async (req) => {
   }
   if (password.length < 8) return reply({ error: "Temporary password must be at least 8 characters." }, 400);
 
-  // Reserved synthetic address enables Supabase email/password auth without sending any email.
-  const authEmail = username + "@login.shutterbook.invalid";
+  // Synthetic, syntactically valid address enables password auth without sending any email.
+  const authEmail = username + "@login.shutterbook.com";
   const { data: created, error: createError } = await adminClient.auth.admin.createUser({
     email: authEmail,
     password,
